@@ -17,7 +17,7 @@ git clone <repo-url>
 cd envoy-parse
 
 # Create a virtual environment (optional but recommended)
-python3 -m venv venv
+python3 -m venv .venv
 source venv/bin/activate  # On Windows use `venv\Scripts\activate`
 
 # Install dependencies
@@ -75,6 +75,12 @@ pytest tests/
 ```sh
 flake8 envoy_parse.py
 black .
+```
+
+## Frontend
+
+```shell
+npx @shadcn/ui add
 ```
 
 ## Contributing

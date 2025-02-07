@@ -1,0 +1,58 @@
+{
+ "listener_statuses": [
+  {
+   "name": "envoy_prometheus_metrics_listener",
+   "local_address": {
+    "socket_address": {
+     "address": "0.0.0.0",
+     "port_value": 20200
+    }
+   }
+  },
+  {
+   "name": "exposed_path_ready:10.42.0.23:20500",
+   "local_address": {
+    "socket_address": {
+     "address": "10.42.0.23",
+     "port_value": 20500
+    }
+   }
+  },
+  {
+   "name": "public_listener:10.42.0.23:20000",
+   "local_address": {
+    "socket_address": {
+     "address": "10.42.0.23",
+     "port_value": 20000
+    }
+   }
+  },
+  {
+   "name": "outbound_listener:127.0.0.1:15001",
+   "local_address": {
+    "socket_address": {
+     "address": "127.0.0.1",
+     "port_value": 15001
+    }
+   }
+  },
+  {
+   "name": "exposed_path_health:10.42.0.23:20300",
+   "local_address": {
+    "socket_address": {
+     "address": "10.42.0.23",
+     "port_value": 20300
+    }
+   }
+  },
+  {
+   "name": "exposed_path_ready:10.42.0.23:20400",
+   "local_address": {
+    "socket_address": {
+     "address": "10.42.0.23",
+     "port_value": 20400
+    }
+   }
+  }
+ ]
+}
