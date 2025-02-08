@@ -6,6 +6,7 @@ KUBERNETES_CLI=kubectl
 IS_OPENSHIFT=0
 COMPRESS=0 # Default: do not compress
 DEFAULT_CONTEXT="dc1"
+DEFAULT_ADMIN_API="0:19000"
 DEFAULT_OUTPUT_DIR="envoy-dumper"
 DEFAULT_FORMAT="txt"
 DEFAULT_LOG_LEVEL="trace"
@@ -34,6 +35,7 @@ ERR_CLI_NOT_FOUND="Neither 'oc' nor 'kubectl' is available. Please install one o
 ERR_NO_PODS_FOUND="No pods found for service: %s in namespace: %s"
 
 # Default configuration and environment variables
+export ENVOY_ADMIN_API="$DEFAULT_ADMIN_API"
 export CONTEXT="$DEFAULT_CONTEXT"       # Default Kubernetes context
 export SERVICE=""                       # Kubernetes service name
 export SERVICE_NS=""                    # Kubernetes service namespace
@@ -50,12 +52,36 @@ export FORMAT="$DEFAULT_FORMAT"         # Default output format
 export LOG_LEVEL="$DEFAULT_LOG_LEVEL"   # Default Envoy log level
 export KUBE_CLI=                        # Kubernetes CLI (kubectl or "${KUBE_CLI}")
 
+# First arg is the char to print + second arg is the length
+print_line() {
+  SCREEN_SIZE=$(( $(tput cols) / 4))
+  DEFAULT_CHAR='-'
+
+  if [ -n "$1" ]; then DEFAULT_CHAR="$1"; fi
+  if [ -n "$2" ]; then SCREEN_SIZE="$2"; fi
+
+  # By default will print pattern1 -
+  printf '%'${SCREEN_SIZE}'s\n' | tr ' ' "${DEFAULT_CHAR}"
+}
+
 # Function to display a banner
 banner() {
-  printf '%s\n' "################################################"
-  printf '%b%s%b\n' "${COLOR_BLUE}Consul K8s | Envoy Sidecar Dumper${COLOR_RESET}"
-  printf "Service: '%s' | Namespace: '%s' | Cluster: '%s'\n" "$SERVICE" "$SERVICE_NS" "$CONTEXT"
-  printf '%s\n\n' "################################################"
+  terminal_width=$(( $(tput cols) / 4))
+  title="Consul K8s | Envoy Sidecar Dumper"
+  line_char='='
+
+  padding=$(( (terminal_width - ${#title}) / 2 ))  # Calculate padding for centering the title
+  formatted_title=$(printf "%${padding}s%s\n" "" "${title}") # Add the spaces for centering
+
+  print_line "${line_char}"
+  printf '%b%s%b\n' "${COLOR_BLUE}${formatted_title}${COLOR_RESET}" # Automatically centered title
+  service="$( [ -z "${SERVICE}" ] && echo "none" || echo "${SERVICE}" )"
+  service_ns="$( [ -z "${SERVICE_NS}" ] && echo "none" || echo "${SERVICE_NS}" )"
+  printf "%$(( padding / 2))sService: '${COLOR_WARN}%s${COLOR_RESET}' | Namespace: '${COLOR_WARN}%s${COLOR_RESET}' | Cluster: '${COLOR_WARN}%s${COLOR_RESET}'\n" "" \
+      "$service" \
+      "$service_ns" \
+      "$CONTEXT"
+  print_line "${line_char}"
 }
 
 # Function to display usage information
@@ -65,24 +91,24 @@ usage() {
 
 Usage: $(basename "$0") [parameters] [capture_options] [options]
 
-Parameters (Required):
-  --context              Kubernetes context (e.g., dc1, dc2)
-  -s, --service          Kubernetes service deployment name
-  -n, --namespace        Kubernetes service namespace
-Capture Options:
-  -a, --all              Dump Envoy logs, configuration, clusters, and listeners
-  --logs                 Collect Envoy logs at the specified log level (--log-level)
-  --stats                Collect Envoy stats
-  --config               Collect Envoy configuration
-  --clusters             Collect Envoy cluster details
-  --listeners            Collect Envoy listener details
-Options:
-  --help                 Show this help menu
-  --format               Output dump format (text/json; default: $FORMAT)
-  --out-dir              Directory for output files (default: $OUTPUT_DIR)
-  --log-level            Set Envoy logging level (default: $LOG_LEVEL)
-  -r, --reset-counters   Reset Envoy counters
-  -rd, --reset-dump-dir  Clear the output dump directory
+    Parameters (Required):
+      --context              Kubernetes context (e.g., dc1, dc2)
+      -s, --service          Kubernetes service deployment name
+      -n, --namespace        Kubernetes service namespace
+    Capture Options:
+      -a, --all              Dump Envoy logs, configuration, clusters, and listeners
+      --logs                 Collect Envoy logs at the specified log level (--log-level)
+      --stats                Collect Envoy stats
+      --config               Collect Envoy configuration
+      --clusters             Collect Envoy cluster details
+      --listeners            Collect Envoy listener details
+    Options:
+      --help                 Show this help menu
+      --format               Output dump format (text/json; default: $FORMAT)
+      --out-dir              Directory for output files (default: $OUTPUT_DIR)
+      --log-level            Set Envoy logging level (default: $LOG_LEVEL)
+      -r, --reset-counters   Reset Envoy counters
+      -rd, --reset-dump-dir  Clear the output dump directory
 EOF
   exit "${1:-0}"
 }
@@ -345,28 +371,28 @@ collect_dump() {
         logger ERROR "Failed to retrieve logs for pod/$pod"
       ;;
     config_dump)
-      endpoint="0:19000/config_dump?include_eds"
+      endpoint="${ENVOY_ADMIN_API}/config_dump?include_eds"
       logger INFO "Fetching config dump from pod/$pod at $endpoint"
       "${KUBE_CLI}" exec --namespace "$SERVICE_NS" --context "$CONTEXT" "pod/$pod" -c "${SERVICE#consul-}" -- \
         curl -s "$endpoint" >"$output_file" ||
         logger ERROR "Failed to fetch config dump for pod/$pod"
       ;;
     stats)
-      endpoint="0:19000/stats?format=$FORMAT"
+      endpoint="${ENVOY_ADMIN_API}/stats?format=$FORMAT"
       logger INFO "Fetching stats from pod/$pod at $endpoint"
       "${KUBE_CLI}" exec --namespace "$SERVICE_NS" --context "$CONTEXT" "pod/$pod" -c "${SERVICE#consul-}" -- \
         curl -s "$endpoint" >"$output_file" ||
         logger ERROR "Failed to fetch stats for pod/$pod"
       ;;
     clusters)
-      endpoint="0:19000/clusters?format=$FORMAT"
+      endpoint="${ENVOY_ADMIN_API}/clusters?format=$FORMAT"
       logger INFO "Fetching clusters from pod/$pod at $endpoint"
       "${KUBE_CLI}" exec --namespace "$SERVICE_NS" --context "$CONTEXT" "pod/$pod" -c "${SERVICE#consul-}" -- \
         curl -s "$endpoint" >"$output_file" ||
         logger ERROR "Failed to fetch clusters for pod/$pod"
       ;;
     listeners)
-      endpoint="0:19000/listeners?format=$FORMAT"
+      endpoint="${ENVOY_ADMIN_API}/listeners?format=$FORMAT"
       logger INFO "Fetching listeners from pod/$pod at $endpoint"
       "${KUBE_CLI}" exec --namespace "$SERVICE_NS" --context "$CONTEXT" "pod/$pod" -c "${SERVICE#consul-}" -- \
         curl -s "$endpoint" >"$output_file" ||
@@ -410,6 +436,10 @@ main() {
     case "$1" in
     --context)
       CONTEXT="$2"
+      shift 2
+      ;;
+    --envoy-admin-addr)
+      ENVOY_ADMIN_API="$2"
       shift 2
       ;;
     -s | --service)
