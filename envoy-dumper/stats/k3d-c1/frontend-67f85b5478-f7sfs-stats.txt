@@ -1,2 +1,0 @@
-usage: /stats?format=(html|active-html|json|prometheus|text)
-

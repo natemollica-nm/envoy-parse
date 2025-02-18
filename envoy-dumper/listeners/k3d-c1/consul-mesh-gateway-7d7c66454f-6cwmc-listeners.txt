@@ -1,0 +1,2 @@
+envoy_prometheus_metrics_listener::10.42.0.11:20200
+default:10.42.0.11:8443::10.42.0.11:8443
