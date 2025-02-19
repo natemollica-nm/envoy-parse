@@ -1,0 +1,6 @@
+envoy_prometheus_metrics_listener::0.0.0.0:20200
+exposed_path_ready:10.42.0.26:20500::10.42.0.26:20500
+public_listener:10.42.0.26:20000::10.42.0.26:20000
+outbound_listener:127.0.0.1:15001::127.0.0.1:15001
+exposed_path_health:10.42.0.26:20300::10.42.0.26:20300
+exposed_path_ready:10.42.0.26:20400::10.42.0.26:20400

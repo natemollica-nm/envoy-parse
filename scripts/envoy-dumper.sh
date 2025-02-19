@@ -17,7 +17,7 @@ IS_OPENSHIFT=0
 COMPRESS=0
 DEFAULT_CONTEXT=
 DEFAULT_ADMIN_API="0:19000"
-DEFAULT_OUTPUT_DIR="envoy-dumper"
+DEFAULT_OUTPUT_DIR="./envoy-dumper"
 DEFAULT_FORMAT="text"
 DEFAULT_LOG_LEVEL="info"
 DUMP_TYPES="clusters config_dump listeners logs stats tcpdump"
@@ -388,7 +388,7 @@ set_log_level() {
 
     # If the in-pod curl didn't work or wasn't HTTP 200, use fallback
     if [ "$?" -ne 0 ] || [ "$response" != "200" ]; then
-      logger WARN "curl not found or request failed on $pod (HTTP Response Code: '$response'). Falling back to port-forward..."
+      logger WARN "curl not found or request failed on pod/$pod (HTTP Response Code: '$response'). Falling back to port-forward..."
       # 2) Fallback: port-forward from local 19001 => remote 19000
       path_only="/logging?level=$LOG_LEVEL"
       fallback_code="$(set_log_level_via_port_forward "$pod" "$SERVICE_NS" 19001 19000 "$path_only")"
@@ -444,8 +444,8 @@ collect_envoy_via_port_forward() {
   # Disable the trap so it doesn’t trigger again on normal exit
   trap - INT TERM HUP EXIT
 
-  # Return the output by echoing it to stdout
-  echo "$envoy_output"
+  # Return the output by echoing it to stdout | Use `printf` to escape the JSON carefully
+  printf '%s' "$envoy_output"
 }
 
 collect_dump() {
@@ -484,11 +484,10 @@ collect_dump() {
         path_only="/config_dump?include_eds"
         endpoint="${ENVOY_ADMIN_API}${path_only}"
         logger INFO "Fetching config_dump from $pod ($endpoint)"
-        pod_output="$($KUBE_CLI exec -n "$SERVICE_NS" --context "$CONTEXT" \
-          "pod/$pod" -c "${SERVICE#consul-}" -- curl -s "$endpoint" 2>/dev/null)"
+        pod_output="$($KUBE_CLI exec -n "$SERVICE_NS" --context "$CONTEXT" "pod/$pod" -c "${SERVICE#consul-}" -- curl -s "$endpoint" 2>/dev/null)"
         # If it fails, fallback
         if [ $? -ne 0 ] || [ -z "$pod_output" ]; then
-          logger WARN "curl not found or request failed; using port-forward (fallback)."
+          logger WARN "curl not found or request failed on pod/$pod; using port-forward (fallback)."
           pod_output="$(collect_envoy_via_port_forward \
             "$pod" \
             "$SERVICE_NS" \
@@ -502,10 +501,9 @@ collect_dump() {
         path_only="/stats?format=$FORMAT"
         endpoint="${ENVOY_ADMIN_API}${path_only}"
         logger INFO "Fetching stats from $pod ($endpoint)"
-        pod_output="$($KUBE_CLI exec -n "$SERVICE_NS" --context "$CONTEXT" \
-          "pod/$pod" -c "${SERVICE#consul-}" -- curl -s "$endpoint" 2>/dev/null)"
+        pod_output="$($KUBE_CLI exec -n "$SERVICE_NS" --context "$CONTEXT" "pod/$pod" -c "${SERVICE#consul-}" -- curl -s "$endpoint" 2>/dev/null)"
         if [ $? -ne 0 ] || [ -z "$pod_output" ]; then
-          logger WARN "curl not found or request failed; using port-forward (fallback)."
+          logger WARN "curl not found or request failed on pod/$pod; using port-forward (fallback)."
           pod_output="$(collect_envoy_via_port_forward \
             "$pod" \
             "$SERVICE_NS" \
@@ -519,10 +517,9 @@ collect_dump() {
         path_only="/clusters?format=$FORMAT"
         endpoint="${ENVOY_ADMIN_API}${path_only}"
         logger INFO "Fetching clusters from $pod ($endpoint)"
-        pod_output="$($KUBE_CLI exec -n "$SERVICE_NS" --context "$CONTEXT" \
-          "pod/$pod" -c "${SERVICE#consul-}" -- curl -s "$endpoint" 2>/dev/null)"
+        pod_output="$($KUBE_CLI exec -n "$SERVICE_NS" --context "$CONTEXT" "pod/$pod" -c "${SERVICE#consul-}" -- curl -s "$endpoint" 2>/dev/null)"
         if [ $? -ne 0 ] || [ -z "$pod_output" ]; then
-          logger WARN "curl not found or request failed; using port-forward (fallback)."
+          logger WARN "curl not found or request failed on pod/$pod; using port-forward (fallback)."
           pod_output="$(collect_envoy_via_port_forward \
             "$pod" \
             "$SERVICE_NS" \
@@ -536,10 +533,9 @@ collect_dump() {
         path_only="/listeners?format=$FORMAT"
         endpoint="${ENVOY_ADMIN_API}${path_only}"
         logger INFO "Fetching listeners from $pod ($endpoint)"
-        pod_output="$($KUBE_CLI exec -n "$SERVICE_NS" --context "$CONTEXT" \
-          "pod/$pod" -c "${SERVICE#consul-}" -- curl -s "$endpoint" 2>/dev/null)"
+        pod_output="$($KUBE_CLI exec -n "$SERVICE_NS" --context "$CONTEXT" "pod/$pod" -c "${SERVICE#consul-}" -- curl -s "$endpoint" 2>/dev/null)"
         if [ $? -ne 0 ] || [ -z "$pod_output" ]; then
-          logger WARN "curl not found or request failed; using port-forward (fallback)."
+          logger WARN "curl not found or request failed on pod/$pod; using port-forward (fallback)."
           pod_output="$(collect_envoy_via_port_forward \
             "$pod" \
             "$SERVICE_NS" \
@@ -557,7 +553,10 @@ collect_dump() {
 
     # Write output if we have it
     if [ -n "$pod_output" ]; then
-      echo "$pod_output" > "$outfile"
+      # Use `printf` to escape the JSON carefully
+      [ "$ext" = json ] && \
+          printf '%s' "$pod_output" | jq --raw-input --raw-output . >"${outfile}" || \
+          echo "$pod_output" > "$outfile"
       logger INFO "Data saved to $outfile"
     else
       logger WARN "No output from $pod. Skipping file."
@@ -585,6 +584,13 @@ manage_operations() {
   if is_reset_counters_only_run; then
     reset_outlier_detection "$SERVICE_NS" "$SERVICE" "$CONTEXT" || err "Failed reset outlier detection."
     return 0
+  fi
+
+  [ "$LOG_LEVEL" != "info" ] && set_log_level
+
+  if [ "$RESET_COUNTERS" -eq 1 ]; then
+    reset_outlier_detection "$SERVICE_NS" "$SERVICE" "$CONTEXT" || err "Failed reset counters."
+    logger INFO "Outlier detection counters reset successfully."
   fi
   # shellcheck disable=SC2015
   [ "$CLEAR_DUMP_DIR" -eq 1 ] && manage_dump_directory "$ACTION_CLEAR" || manage_dump_directory "$ACTION_CREATE"
@@ -622,12 +628,7 @@ main() {
   validate_inputs && clear
   banner
   manage_operations
-  [ -n "$LOG_LEVEL" ] && set_log_level
 
-  if [ "$RESET_COUNTERS" -eq 1 ]; then
-    reset_outlier_detection "$SERVICE_NS" "$SERVICE" "$CONTEXT" || err "Failed reset counters."
-    logger INFO "Outlier detection counters reset successfully."
-  fi
 
   [ "$ALL" -eq 1 ] && { LOGS=1; CONFIG=1; STATS=1; CLUSTERS=1; LISTENERS=1; }
 
