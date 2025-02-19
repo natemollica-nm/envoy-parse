@@ -7,9 +7,9 @@
      "id": "backend-5bb45c8d59-wdrqc-backend-sidecar-proxy",
      "cluster": "backend",
      "metadata": {
+      "partition": "default",
       "namespace": "consul",
-      "node_name": "k3d-c1-server-0-virtual",
-      "partition": "default"
+      "node_name": "k3d-c1-server-0-virtual"
      },
      "user_agent_name": "envoy",
      "user_agent_build_version": {
@@ -20,9 +20,9 @@
       },
       "metadata": {
        "build.type": "RELEASE",
-       "ssl.version": "BoringSSL",
        "revision.status": "Clean",
-       "revision.sha": "e3b4a6e9570da15ac1caffdded17a8bebdc7dfc9"
+       "revision.sha": "e3b4a6e9570da15ac1caffdded17a8bebdc7dfc9",
+       "ssl.version": "BoringSSL"
       }
      },
      "extensions": [
@@ -3603,6 +3603,63 @@
     {
      "endpoint_config": {
       "@type": "type.googleapis.com/envoy.config.endpoint.v3.ClusterLoadAssignment",
+      "cluster_name": "destination.dl-cdn-alpinelinux-org.apk-package-repo.default.dc1.internal.c82e59aa-3cd2-6f61-e098-81aef0fa0322.consul",
+      "policy": {
+       "overprovisioning_factor": 140
+      }
+     }
+    },
+    {
+     "endpoint_config": {
+      "@type": "type.googleapis.com/envoy.config.endpoint.v3.ClusterLoadAssignment",
+      "cluster_name": "destination.10-43-116-52.backend-db.default.dc1.internal.c82e59aa-3cd2-6f61-e098-81aef0fa0322.consul",
+      "endpoints": [
+       {
+        "locality": {},
+        "lb_endpoints": [
+         {
+          "endpoint": {
+           "address": {
+            "socket_address": {
+             "address": "10.42.0.18",
+             "port_value": 8443
+            }
+           },
+           "health_check_config": {}
+          },
+          "health_status": "HEALTHY",
+          "load_balancing_weight": 1
+         }
+        ],
+        "load_balancing_weight": 0
+       }
+      ],
+      "policy": {
+       "overprovisioning_factor": 140
+      }
+     }
+    },
+    {
+     "endpoint_config": {
+      "@type": "type.googleapis.com/envoy.config.endpoint.v3.ClusterLoadAssignment",
+      "cluster_name": "apk-package-repo.default.dc1.internal.c82e59aa-3cd2-6f61-e098-81aef0fa0322.consul",
+      "policy": {
+       "overprovisioning_factor": 140
+      }
+     }
+    },
+    {
+     "endpoint_config": {
+      "@type": "type.googleapis.com/envoy.config.endpoint.v3.ClusterLoadAssignment",
+      "cluster_name": "webpage.default.dc1.internal.c82e59aa-3cd2-6f61-e098-81aef0fa0322.consul",
+      "policy": {
+       "overprovisioning_factor": 140
+      }
+     }
+    },
+    {
+     "endpoint_config": {
+      "@type": "type.googleapis.com/envoy.config.endpoint.v3.ClusterLoadAssignment",
       "cluster_name": "local_app",
       "endpoints": [
        {
@@ -3614,6 +3671,66 @@
             "socket_address": {
              "address": "127.0.0.1",
              "port_value": 9191
+            }
+           },
+           "health_check_config": {}
+          },
+          "health_status": "HEALTHY",
+          "load_balancing_weight": 1
+         }
+        ],
+        "load_balancing_weight": 0
+       }
+      ],
+      "policy": {
+       "overprovisioning_factor": 140
+      }
+     }
+    },
+    {
+     "endpoint_config": {
+      "@type": "type.googleapis.com/envoy.config.endpoint.v3.ClusterLoadAssignment",
+      "cluster_name": "google.default.dc1.internal.c82e59aa-3cd2-6f61-e098-81aef0fa0322.consul",
+      "endpoints": [
+       {
+        "locality": {},
+        "lb_endpoints": [
+         {
+          "endpoint": {
+           "address": {
+            "socket_address": {
+             "address": "10.42.0.18",
+             "port_value": 8443
+            }
+           },
+           "health_check_config": {}
+          },
+          "health_status": "HEALTHY",
+          "load_balancing_weight": 1
+         }
+        ],
+        "load_balancing_weight": 0
+       }
+      ],
+      "policy": {
+       "overprovisioning_factor": 140
+      }
+     }
+    },
+    {
+     "endpoint_config": {
+      "@type": "type.googleapis.com/envoy.config.endpoint.v3.ClusterLoadAssignment",
+      "cluster_name": "destination.backend-db-default-svc-cluster-local.backend-db.default.dc1.internal.c82e59aa-3cd2-6f61-e098-81aef0fa0322.consul",
+      "endpoints": [
+       {
+        "locality": {},
+        "lb_endpoints": [
+         {
+          "endpoint": {
+           "address": {
+            "socket_address": {
+             "address": "10.42.0.18",
+             "port_value": 8443
             }
            },
            "health_check_config": {}
@@ -3681,46 +3798,7 @@
     {
      "endpoint_config": {
       "@type": "type.googleapis.com/envoy.config.endpoint.v3.ClusterLoadAssignment",
-      "cluster_name": "destination.10-42-0-25.backend-db.default.dc1.internal.c82e59aa-3cd2-6f61-e098-81aef0fa0322.consul",
-      "endpoints": [
-       {
-        "locality": {},
-        "lb_endpoints": [
-         {
-          "endpoint": {
-           "address": {
-            "socket_address": {
-             "address": "10.42.0.18",
-             "port_value": 8443
-            }
-           },
-           "health_check_config": {}
-          },
-          "health_status": "HEALTHY",
-          "load_balancing_weight": 1
-         }
-        ],
-        "load_balancing_weight": 0
-       }
-      ],
-      "policy": {
-       "overprovisioning_factor": 140
-      }
-     }
-    },
-    {
-     "endpoint_config": {
-      "@type": "type.googleapis.com/envoy.config.endpoint.v3.ClusterLoadAssignment",
       "cluster_name": "destination.httpbin-org.httpbin.default.dc1.internal.c82e59aa-3cd2-6f61-e098-81aef0fa0322.consul",
-      "policy": {
-       "overprovisioning_factor": 140
-      }
-     }
-    },
-    {
-     "endpoint_config": {
-      "@type": "type.googleapis.com/envoy.config.endpoint.v3.ClusterLoadAssignment",
-      "cluster_name": "destination.dl-cdn-alpinelinux-org.apk-package-repo.default.dc1.internal.c82e59aa-3cd2-6f61-e098-81aef0fa0322.consul",
       "policy": {
        "overprovisioning_factor": 140
       }
@@ -3759,115 +3837,37 @@
     {
      "endpoint_config": {
       "@type": "type.googleapis.com/envoy.config.endpoint.v3.ClusterLoadAssignment",
+      "cluster_name": "destination.10-42-0-25.backend-db.default.dc1.internal.c82e59aa-3cd2-6f61-e098-81aef0fa0322.consul",
+      "endpoints": [
+       {
+        "locality": {},
+        "lb_endpoints": [
+         {
+          "endpoint": {
+           "address": {
+            "socket_address": {
+             "address": "10.42.0.18",
+             "port_value": 8443
+            }
+           },
+           "health_check_config": {}
+          },
+          "health_status": "HEALTHY",
+          "load_balancing_weight": 1
+         }
+        ],
+        "load_balancing_weight": 0
+       }
+      ],
+      "policy": {
+       "overprovisioning_factor": 140
+      }
+     }
+    },
+    {
+     "endpoint_config": {
+      "@type": "type.googleapis.com/envoy.config.endpoint.v3.ClusterLoadAssignment",
       "cluster_name": "passthrough~google.default.dc1.internal.c82e59aa-3cd2-6f61-e098-81aef0fa0322.consul",
-      "policy": {
-       "overprovisioning_factor": 140
-      }
-     }
-    },
-    {
-     "endpoint_config": {
-      "@type": "type.googleapis.com/envoy.config.endpoint.v3.ClusterLoadAssignment",
-      "cluster_name": "destination.10-43-116-52.backend-db.default.dc1.internal.c82e59aa-3cd2-6f61-e098-81aef0fa0322.consul",
-      "endpoints": [
-       {
-        "locality": {},
-        "lb_endpoints": [
-         {
-          "endpoint": {
-           "address": {
-            "socket_address": {
-             "address": "10.42.0.18",
-             "port_value": 8443
-            }
-           },
-           "health_check_config": {}
-          },
-          "health_status": "HEALTHY",
-          "load_balancing_weight": 1
-         }
-        ],
-        "load_balancing_weight": 0
-       }
-      ],
-      "policy": {
-       "overprovisioning_factor": 140
-      }
-     }
-    },
-    {
-     "endpoint_config": {
-      "@type": "type.googleapis.com/envoy.config.endpoint.v3.ClusterLoadAssignment",
-      "cluster_name": "apk-package-repo.default.dc1.internal.c82e59aa-3cd2-6f61-e098-81aef0fa0322.consul",
-      "policy": {
-       "overprovisioning_factor": 140
-      }
-     }
-    },
-    {
-     "endpoint_config": {
-      "@type": "type.googleapis.com/envoy.config.endpoint.v3.ClusterLoadAssignment",
-      "cluster_name": "webpage.default.dc1.internal.c82e59aa-3cd2-6f61-e098-81aef0fa0322.consul",
-      "policy": {
-       "overprovisioning_factor": 140
-      }
-     }
-    },
-    {
-     "endpoint_config": {
-      "@type": "type.googleapis.com/envoy.config.endpoint.v3.ClusterLoadAssignment",
-      "cluster_name": "destination.backend-db-default-svc-cluster-local.backend-db.default.dc1.internal.c82e59aa-3cd2-6f61-e098-81aef0fa0322.consul",
-      "endpoints": [
-       {
-        "locality": {},
-        "lb_endpoints": [
-         {
-          "endpoint": {
-           "address": {
-            "socket_address": {
-             "address": "10.42.0.18",
-             "port_value": 8443
-            }
-           },
-           "health_check_config": {}
-          },
-          "health_status": "HEALTHY",
-          "load_balancing_weight": 1
-         }
-        ],
-        "load_balancing_weight": 0
-       }
-      ],
-      "policy": {
-       "overprovisioning_factor": 140
-      }
-     }
-    },
-    {
-     "endpoint_config": {
-      "@type": "type.googleapis.com/envoy.config.endpoint.v3.ClusterLoadAssignment",
-      "cluster_name": "google.default.dc1.internal.c82e59aa-3cd2-6f61-e098-81aef0fa0322.consul",
-      "endpoints": [
-       {
-        "locality": {},
-        "lb_endpoints": [
-         {
-          "endpoint": {
-           "address": {
-            "socket_address": {
-             "address": "10.42.0.18",
-             "port_value": 8443
-            }
-           },
-           "health_check_config": {}
-          },
-          "health_status": "HEALTHY",
-          "load_balancing_weight": 1
-         }
-        ],
-        "load_balancing_weight": 0
-       }
-      ],
       "policy": {
        "overprovisioning_factor": 140
       }

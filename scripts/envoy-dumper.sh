@@ -168,13 +168,12 @@ verify_installed() { command -v "$1" >/dev/null 2>&1; }
 
 
 set_kube_context() {
-  CONTEXT="$($KUBE_CLI config current-context 2>/dev/null)"
-  if [ -n "$CONTEXT" ]; then
+  if [ -z "$CONTEXT" ]; then
+    CONTEXT="$($KUBE_CLI config current-context 2>/dev/null)"
     logger INFO "Using current-context: $CONTEXT"
-  else
-    DEFAULT_CONTEXT=default
-    logger WARN "No current context. Fallback to: $DEFAULT_CONTEXT"
+    return 0
   fi
+  logger INFO "Using parameter-set context: $CONTEXT"
 }
 #------------------------------------------------------------------------------
 # set_kube_cli: Sets KUBE_CLI and context if available
@@ -617,9 +616,9 @@ main() {
       --listeners)                  LISTENERS=1; ALL=0; shift;;
       -r|--reset-counters)          RESET_COUNTERS=1; shift;;
       -rd|--reset-dump-dir)         CLEAR_DUMP_DIR=1; shift;;
-      --format|--format=*)         FORMAT="$( [ "${1#*=}" != "$1" ] && echo "${1#*=}" || echo "$2" )"; [ "${1#*=}" = "$1" ] && shift 2 || shift;;
-      --out-dir|--out-dir=*)       OUTPUT_DIR="$( [ "${1#*=}" != "$1" ] && echo "${1#*=}" || echo "$2" )"; [ "${1#*=}" = "$1" ] && shift 2 || shift;;
-      --log-level|--log-level=*)   LOG_LEVEL="$( [ "${1#*=}" != "$1" ] && echo "${1#*=}" || echo "$2" )"; [ "${1#*=}" = "$1" ] && shift 2 || shift;;
+      --format|--format=*)          FORMAT="$( [ "${1#*=}" != "$1" ] && echo "${1#*=}" || echo "$2" )"; [ "${1#*=}" = "$1" ] && shift 2 || shift;;
+      --out-dir|--out-dir=*)        OUTPUT_DIR="$( [ "${1#*=}" != "$1" ] && echo "${1#*=}" || echo "$2" )"; [ "${1#*=}" = "$1" ] && shift 2 || shift;;
+      --log-level|--log-level=*)    LOG_LEVEL="$( [ "${1#*=}" != "$1" ] && echo "${1#*=}" || echo "$2" )"; [ "${1#*=}" = "$1" ] && shift 2 || shift;;
       --compress)                   COMPRESS=1; shift;;
       --help|-h)                    usage 0;;
       *)                            err "Unknown option: $1";;
