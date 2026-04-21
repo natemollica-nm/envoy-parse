@@ -438,7 +438,8 @@ def filter_envoy_relationships(data):
     logging.debug(f"Extracted listeners: {listeners}")
 
     # Build relationships in a single pass
-    relationships = build_relationships(endpoints, clusters, listeners)
+    has_eds = len(dynamic_endpoints) > 0
+    relationships = build_relationships(endpoints, clusters, listeners, has_eds)
 
     return relationships
 
@@ -555,7 +556,7 @@ def extract_listeners(dynamic_listeners):
     return listeners
 
 
-def build_relationships(endpoints, clusters, listeners):
+def build_relationships(endpoints, clusters, listeners, has_eds=True):
     """
     Builds relationships between endpoints, clusters, and listeners.
 
@@ -590,9 +591,10 @@ def build_relationships(endpoints, clusters, listeners):
                     relationships.append(
                         {
                             "listener": listener_name,
-                            "filter_chain": "envoy.filters.network.sni_cluster",
+                            "filter_chain": " -> ".join(filter_names),
                             "cluster": cluster_name,
                             "endpoints": endpoints.get(cluster_name, []),
+                            "has_eds": has_eds,
                         }
                     )
                 continue
@@ -611,6 +613,7 @@ def build_relationships(endpoints, clusters, listeners):
                             "filter_chain": filter_name or "unknown",
                             "cluster": filter_cluster,
                             "endpoints": endpoints.get(filter_cluster, []),
+                            "has_eds": has_eds,
                         }
                     )
 
@@ -782,6 +785,8 @@ def format_columnized_output(data):
                 f"{ep['address']}:{ep['port']} {HEALTH_STATUS.get(ep['health_status'])}"
                 for ep in entry.get("endpoints", [])
             )
+            if not endpoints and not entry.get("has_eds", True):
+                endpoints = "N/A (no EDS)"
 
             table_data.append([listener, filter_chain, cluster, endpoints])
 
