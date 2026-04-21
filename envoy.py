@@ -421,6 +421,9 @@ def filter_envoy_relationships(data):
 
     for entry in data.get("configs", []):  # /configs/0/bootstrap/static_resources
         static_clusters.extend(entry.get("static_resources", {}).get("clusters", []))
+        static_clusters.extend(
+            sc.get("cluster", {}) for sc in entry.get("static_clusters", []) if sc.get("cluster")
+        )
         dynamic_clusters.extend(entry.get("dynamic_active_clusters", []))
         dynamic_endpoints.extend(entry.get("dynamic_endpoint_configs", []))
         dynamic_listeners.extend(entry.get("dynamic_listeners", []))
@@ -576,37 +579,40 @@ def build_relationships(endpoints, clusters, listeners):
     """
     relationships = []
 
-    for cluster_name, cluster_endpoints in endpoints.items():
-        matching_cluster = clusters.get(cluster_name)
+    for listener_name, filter_chains in listeners.items():
+        for chain in filter_chains:
+            filters = chain.get("filters", [])
+            filter_names = [f.get("name") for f in filters]
 
-        if not matching_cluster:
-            logging.debug(
-                f"Skipping cluster {cluster_name}: Not found in extracted clusters."
-            )
-            continue
+            # Detect SNI-based dynamic routing (e.g., terminating gateways)
+            if "envoy.filters.network.sni_cluster" in filter_names:
+                for cluster_name in clusters:
+                    relationships.append(
+                        {
+                            "listener": listener_name,
+                            "filter_chain": "envoy.filters.network.sni_cluster",
+                            "cluster": cluster_name,
+                            "endpoints": endpoints.get(cluster_name, []),
+                        }
+                    )
+                continue
 
-        for listener_name, filter_chains in listeners.items():
-            for chain in filter_chains:
-                for filter_entry in chain.get("filters", []):
-                    config = filter_entry.get("typed_config", {})
+            for filter_entry in filters:
+                config = filter_entry.get("typed_config", {})
+                filter_cluster = config.get(
+                    "cluster"
+                ) or extract_cluster_from_route_config(config)
+                filter_name = filter_entry.get("name")
 
-                    # Extract the cluster name from route config or direct cluster field
-                    filter_cluster = config.get(
-                        "cluster"
-                    ) or extract_cluster_from_route_config(config)
-                    filter_name = filter_entry.get("name")
-
-                    if filter_cluster and filter_cluster == cluster_name:
-                        relationships.append(
-                            {
-                                "listener": listener_name,
-                                "filter_chain": filter_name
-                                or filter_entry.get("name")
-                                or "unknown",
-                                "cluster": cluster_name,
-                                "endpoints": cluster_endpoints,
-                            }
-                        )
+                if filter_cluster and filter_cluster in clusters:
+                    relationships.append(
+                        {
+                            "listener": listener_name,
+                            "filter_chain": filter_name or "unknown",
+                            "cluster": filter_cluster,
+                            "endpoints": endpoints.get(filter_cluster, []),
+                        }
+                    )
 
     logging.debug(f"Final relationships built: {relationships}")
     return relationships
