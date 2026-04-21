@@ -55,7 +55,7 @@ export SERVICE_NS=""                    # Service namespace
 export OUTPUT_DIR="$DEFAULT_OUTPUT_DIR" # Directory for output
 export CLEAR_DUMP_DIR=0                # Clear output dir flag
 export ALL=0                            # Dump all resources
-export LOGS=0 STATS=0 CONFIG=0 CLUSTERS=0 LISTENERS=0
+export LOGS=0 STATS=0 CONFIG=0 CLUSTERS=0 LISTENERS=0 TCPDUMP=0
 export RESET_COUNTERS=0 FORMAT="$DEFAULT_FORMAT" LOG_LEVEL="$DEFAULT_LOG_LEVEL"
 export KUBE_CLI=
 
@@ -107,15 +107,17 @@ Usage: $(basename "$0") [parameters] [capture_options] [options]
     -n, --namespace        Kubernetes service namespace
 
   Capture Options:
-    -a, --all              Dump Envoy logs, config, clusters, and listeners
+    -a, --all              Dump Envoy logs, config, clusters, listeners, and tcpdump
     --logs                 Collect Envoy logs at specified log level
     --stats                Collect Envoy stats
     --config               Collect Envoy configuration
     --clusters             Collect Envoy cluster details
     --listeners            Collect Envoy listener details
+    --tcpdump              Capture network traffic from the pod (requires tcpdump in container)
 
   Options:
     --help                 Show this help menu
+    --envoy-admin-addr     Envoy admin API address (default: $ENVOY_ADMIN_API)
     --format <fmt>         Output format (text/json; default: $FORMAT)
     --out-dir <dir>        Output directory (default: $OUTPUT_DIR)
     --log-level <level>    Set Envoy logging level (default: $LOG_LEVEL)
@@ -233,8 +235,8 @@ is_single_operation_run() {
   return 0
 }
 
-is_compress_only_run() { is_single_operation_run COMPRESS LOGS STATS CONFIG CLUSTERS LISTENERS ALL RESET_COUNTERS; }
-is_reset_counters_only_run() { is_single_operation_run RESET_COUNTERS LOGS STATS CONFIG CLUSTERS LISTENERS ALL COMPRESS; }
+is_compress_only_run() { is_single_operation_run COMPRESS LOGS STATS CONFIG CLUSTERS LISTENERS TCPDUMP ALL RESET_COUNTERS; }
+is_reset_counters_only_run() { is_single_operation_run RESET_COUNTERS LOGS STATS CONFIG CLUSTERS LISTENERS TCPDUMP ALL COMPRESS; }
 
 #------------------------------------------------------------------------------
 # smoke_test: Quickly tests CLI access by checking a default resource
@@ -334,21 +336,23 @@ reset_outlier_detection() {
 set_log_level_via_port_forward() {
   pod="$1"
   namespace="$2"
-  local_port="$3"      # e.g., 19001
+  local_port="$3"      # e.g., 19001 (unused, OS assigns port via :0)
   remote_port="$4"     # e.g., 19000
   path_only="$5"       # e.g., /logging?level=trace
 
-  # Start port-forward in background
+  # Start port-forward in background, using :0 to let the OS assign an available port
+  pf_output=$(mktemp)
   "$KUBE_CLI" port-forward \
     --namespace "$namespace" \
     "pod/$pod" \
-    "$local_port:$remote_port" >/dev/null 2>&1 &
+    ":$remote_port" >"$pf_output" 2>&1 &
   pf_pid=$!
 
   # Define a cleanup function that kills the background process
   cleanup_port_forward() {
     kill "$pf_pid" 2>/dev/null
     wait "$pf_pid" 2>/dev/null
+    rm -f "$pf_output"
   }
 
   # Trap signals (and EXIT) to ensure we always clean up
@@ -356,6 +360,14 @@ set_log_level_via_port_forward() {
 
   # Give port-forward a moment to initialize
   sleep 2
+
+  # Extract the OS-assigned local port from port-forward output
+  local_port=$(sed -n 's/.*Forwarding from 127\.0\.0\.1:\([0-9]*\).*/\1/p' "$pf_output" | head -1)
+  if [ -z "$local_port" ]; then
+    logger ERROR "Failed to determine local port from port-forward output"
+    cleanup_port_forward; trap - INT TERM HUP EXIT
+    echo "0"; return 1
+  fi
 
   # Perform the POST, capturing the numeric HTTP status code
   http_code="$(curl -XPOST -s -w '%{http_code}' -o /dev/null "http://127.0.0.1:$local_port$path_only")"
@@ -411,21 +423,23 @@ set_log_level() {
 collect_envoy_via_port_forward() {
   pod="$1"
   namespace="$2"
-  local_port="$3"      # e.g., 19001
+  local_port="$3"      # e.g., 19001 (unused, OS assigns port via :0)
   remote_port="$4"     # e.g., 19000
   endpoint="$5"        # e.g., /stats?format=json
 
-  # Start port-forward in the background
+  # Start port-forward in the background, using :0 to let the OS assign an available port
+  pf_output=$(mktemp)
   "$KUBE_CLI" port-forward \
     --namespace "$namespace" \
     "pod/$pod" \
-    "$local_port:$remote_port" >/dev/null 2>&1 &
+    ":$remote_port" >"$pf_output" 2>&1 &
   pf_pid=$!
 
   # Define a cleanup function that kills the background process
   cleanup_port_forward() {
     kill "$pf_pid" 2>/dev/null
     wait "$pf_pid" 2>/dev/null
+    rm -f "$pf_output"
   }
 
   # Trap signals (and EXIT) to ensure we always clean up
@@ -434,13 +448,21 @@ collect_envoy_via_port_forward() {
   # Give port-forward a moment to start
   sleep 2
 
+  # Extract the OS-assigned local port from port-forward output
+  local_port=$(sed -n 's/.*Forwarding from 127\.0\.0\.1:\([0-9]*\).*/\1/p' "$pf_output" | head -1)
+  if [ -z "$local_port" ]; then
+    logger ERROR "Failed to determine local port from port-forward output"
+    cleanup_port_forward; trap - INT TERM HUP EXIT
+    return 1
+  fi
+
   # Capture the local curl output as a string
   envoy_output="$(curl -s "http://127.0.0.1:$local_port$endpoint")"
 
   # Clean up now that we have the data
   cleanup_port_forward
 
-  # Disable the trap so it doesn’t trigger again on normal exit
+  # Disable the trap so it doesn't trigger again on normal exit
   trap - INT TERM HUP EXIT
 
   # Return the output by echoing it to stdout | Use `printf` to escape the JSON carefully
@@ -456,6 +478,7 @@ collect_dump() {
     stats|clusters|listeners) [ "$FORMAT" = "json" ] && ext="json" || ext="txt" ;;
     config_dump) ext="json" ;;
     logs) ext="log" ;;
+    tcpdump) ext="pcap" ;;
     *) ext="txt" ;;
   esac
 
@@ -544,6 +567,30 @@ collect_dump() {
         fi
         ;;
 
+      tcpdump)
+        # Capture 60 seconds of traffic; writes pcap binary to stdout.
+        # Uses an ephemeral debug container (nicolaka/netshoot) which shares the pod's
+        # network namespace, so tcpdump doesn't need to exist in the original container.
+        # Falls back to in-container tcpdump if ephemeral containers aren't supported.
+        logger INFO "Capturing tcpdump from $pod (60s)"
+        debug_container="tcpdump-$(date +%s)"
+        $KUBE_CLI debug -n "$SERVICE_NS" --context "$CONTEXT" "pod/$pod" \
+          --image=nicolaka/netshoot --container="$debug_container" -- \
+          timeout 60 tcpdump -w - -i any 2>/dev/null > "${outfile}"
+        if [ $? -ne 0 ] || [ ! -s "${outfile}" ]; then
+          logger WARN "Ephemeral container failed on $pod; falling back to in-container tcpdump."
+          rm -f "${outfile}"
+          $KUBE_CLI exec -n "$SERVICE_NS" --context "$CONTEXT" "pod/$pod" -c "${SERVICE#consul-}" -- \
+            timeout 60 tcpdump -w - -i any 2>/dev/null > "${outfile}" || {
+            logger WARN "tcpdump failed on $pod (tcpdump not available in container or ephemeral containers)"
+            rm -f "${outfile}"
+          }
+        fi
+        # Skip the normal write logic below since tcpdump writes binary directly to outfile
+        [ -s "${outfile}" ] && logger INFO "Data saved to $outfile"
+        continue
+        ;;
+
       *)
         logger WARN "Unknown type: $type"
         continue
@@ -554,7 +601,7 @@ collect_dump() {
     if [ -n "$pod_output" ]; then
       # Use `printf` to escape the JSON carefully
       [ "$ext" = json ] && \
-          printf '%s' "$pod_output" | jq --raw-input --raw-output . >"${outfile}" || \
+          printf '%s' "$pod_output" | jq . >"${outfile}" || \
           echo "$pod_output" > "$outfile"
       logger INFO "Data saved to $outfile"
     else
@@ -614,6 +661,7 @@ main() {
       --config)                     CONFIG=1; ALL=0; shift;;
       --clusters)                   CLUSTERS=1; ALL=0; shift;;
       --listeners)                  LISTENERS=1; ALL=0; shift;;
+      --tcpdump)                    TCPDUMP=1; ALL=0; shift;;
       -r|--reset-counters)          RESET_COUNTERS=1; shift;;
       -rd|--reset-dump-dir)         CLEAR_DUMP_DIR=1; shift;;
       --format|--format=*)          FORMAT="$( [ "${1#*=}" != "$1" ] && echo "${1#*=}" || echo "$2" )"; [ "${1#*=}" = "$1" ] && shift 2 || shift;;
@@ -624,18 +672,19 @@ main() {
       *)                            err "Unknown option: $1";;
     esac
   done
-  validate_inputs && clear
+  validate_inputs
   banner
   manage_operations
 
 
-  [ "$ALL" -eq 1 ] && { LOGS=1; CONFIG=1; STATS=1; CLUSTERS=1; LISTENERS=1; }
+  [ "$ALL" -eq 1 ] && { LOGS=1; CONFIG=1; STATS=1; CLUSTERS=1; LISTENERS=1; TCPDUMP=1; }
 
   [ "$LOGS" -eq 1 ]      && collect_dump logs
   [ "$CONFIG" -eq 1 ]    && collect_dump config_dump
   [ "$STATS" -eq 1 ]     && collect_dump stats
   [ "$CLUSTERS" -eq 1 ]  && collect_dump clusters
   [ "$LISTENERS" -eq 1 ] && collect_dump listeners
+  [ "$TCPDUMP" -eq 1 ]  && collect_dump tcpdump
 
   logger INFO "All selected actions completed!"
   [ "$COMPRESS" -eq 1 ] && compress_output
